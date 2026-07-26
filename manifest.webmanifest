@@ -1,9 +1,27 @@
 {
-  "name": "TGintervals V4",
+  "id": "/",
+  "name": "TGintervals",
   "short_name": "TGintervals",
+  "description": "A podcast-friendly interval timer optimized for iPhone.",
+  "lang": "en",
   "start_url": "./",
+  "scope": "./",
   "display": "standalone",
   "orientation": "portrait-primary",
   "background_color": "#101722",
-  "theme_color": "#101722"
+  "theme_color": "#101722",
+  "icons": [
+    {
+      "src": "icons/tgintervals-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/tgintervals-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
 }
