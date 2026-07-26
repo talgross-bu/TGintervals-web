@@ -1,0 +1,9 @@
+{
+  "name": "TGintervals V4",
+  "short_name": "TGintervals",
+  "start_url": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#101722",
+  "theme_color": "#101722"
+}
