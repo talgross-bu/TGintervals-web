@@ -341,6 +341,19 @@ test("recovers audio after podcast app switching and keeps failed recovery pause
   assert.equal(harness.audioContexts.length, 4);
   assert.equal(harness.audioContexts[3].state, "running");
   assert.equal(pauseButton.disabled, false);
+
+  const sourceCountBeforeSecondSuccessfulRecovery = harness.sourceStarts.length;
+  harness.document.visibilityState = "hidden";
+  await harness.document.dispatch("visibilitychange");
+  assert.equal(harness.audioContexts[3].state, "closed");
+  assert.equal(pauseButton.disabled, true);
+
+  harness.document.visibilityState = "visible";
+  await startButton.dispatch("click");
+  assert.equal(harness.audioContexts.length, 5);
+  assert.equal(harness.audioContexts[4].state, "running");
+  assert.equal(pauseButton.disabled, false);
+  assert.ok(harness.sourceStarts.length > sourceCountBeforeSecondSuccessfulRecovery);
 });
 
 test("cancels a pending audio start when the app leaves the foreground", async () => {
