@@ -11,7 +11,7 @@ const read = (relativePath) => fs.readFileSync(path.join(projectRoot, relativePa
 
 test("release manifest and install assets are complete", () => {
   const manifest = JSON.parse(read("manifest.webmanifest"));
-  assert.equal(manifest.id, "/");
+  assert.equal(manifest.id, "./");
   assert.equal(manifest.name, "TGintervals");
   assert.equal(manifest.start_url, "./");
   assert.equal(manifest.scope, "./");
