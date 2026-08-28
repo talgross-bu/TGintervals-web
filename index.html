@@ -27,6 +27,7 @@
       color-scheme: dark;
       font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sans-serif;
       font-synthesis: none;
+      --app-surface: #101722;
       --panel: rgba(255, 255, 255, 0.1);
       --panel-border: rgba(255, 255, 255, 0.18);
       --muted: rgba(255, 255, 255, 0.7);
@@ -42,12 +43,13 @@
     html,
     body {
       margin: 0;
+      height: 100%;
       min-height: 100%;
+      background: var(--app-surface);
       overscroll-behavior: none;
     }
 
     body {
-      background: #101722;
       color: white;
     }
 
@@ -80,6 +82,12 @@
         linear-gradient(160deg, var(--surface-top), var(--surface-bottom) 76%);
       transition: background 420ms ease;
       isolation: isolate;
+    }
+
+    @supports (height: 100dvh) {
+      .app {
+        min-height: 100dvh;
+      }
     }
 
     .app::before,
@@ -950,6 +958,10 @@
         phaseDetail.textContent = "7 rounds finished";
         themeColor.content = "#5943a0";
       }
+
+      // Keep any iPhone safe-area or dynamic-viewport overflow the same color
+      // as the app instead of exposing the root page's default background.
+      document.documentElement?.style.setProperty("--app-surface", themeColor.content);
 
       const startActionLabel = isPaused() ? "Resume timer" : "Start timer";
       startButton.setAttribute("aria-label", isPreparing ? "Preparing audio" : startActionLabel);

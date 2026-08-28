@@ -45,6 +45,8 @@ test("published scripts parse and HTML references the complete runtime bundle", 
   assert.match(html, /serviceWorker\.register\("\.\/service-worker\.js"\)/);
   assert.doesNotMatch(html, /embeddedIconURL/);
   assert.doesNotMatch(html, /TGintervals V4/);
+  assert.match(html, /min-height: 100dvh/);
+  assert.match(html, /--app-surface/);
 
   const headers = read("_headers").toString();
   assert.match(headers, /Content-Security-Policy:/);
