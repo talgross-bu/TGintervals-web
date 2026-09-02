@@ -1,6 +1,6 @@
 "use strict";
 
-const CACHE_VERSION = "tgintervals-4.2.1";
+const CACHE_VERSION = "tgintervals-4.2.2";
 const APP_SHELL = [
   "./index.html",
   "./manifest.webmanifest",

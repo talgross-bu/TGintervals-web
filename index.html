@@ -276,6 +276,11 @@
       text-align: center;
     }
 
+    /* With no message to show, the row and its status dot leave the screen entirely. */
+    .audio-status:empty {
+      display: none;
+    }
+
     .audio-status::before {
       width: 7px;
       height: 7px;
@@ -516,6 +521,25 @@
       line-height: 1.15;
     }
 
+    .time-progress {
+      min-height: 20px;
+      margin: 8px 0 0;
+      color: var(--muted);
+      font-size: clamp(14px, 3.6vw, 17px);
+      font-weight: 650;
+    }
+
+    /* The tinted, blurred control tray read as a separate color band against the
+       solid phase background, so only the buttons themselves stay visible. */
+    .controls {
+      padding: 0;
+      border: 0;
+      background: none;
+      box-shadow: none;
+      backdrop-filter: none;
+      -webkit-backdrop-filter: none;
+    }
+
     .control-button {
       display: grid;
       place-items: center;
@@ -609,6 +633,7 @@
       <p class="phase-label" id="phaseLabel">Ready</p>
       <p class="time" id="timeDisplay" aria-live="off">5</p>
       <p class="phase-detail" id="phaseDetail">7 rounds · 30s work · 55s rest</p>
+      <p class="time-progress" id="timeProgress"></p>
       <div class="progress-track" aria-hidden="true">
         <div class="progress-fill"></div>
       </div>
@@ -692,6 +717,7 @@
     const phaseLabel = document.querySelector("#phaseLabel");
     const timeDisplay = document.querySelector("#timeDisplay");
     const phaseDetail = document.querySelector("#phaseDetail");
+    const timeProgress = document.querySelector("#timeProgress");
     const roundsElement = document.querySelector("#rounds");
     const announcer = document.querySelector("#announcer");
     const audioStatus = document.querySelector("#audioStatus");
@@ -753,6 +779,41 @@
 
     function isCounting() {
       return deadline !== null;
+    }
+
+    // The workout itself is every work round plus the rests between them; the
+    // five-second setup is warm-up and stays out of both figures.
+    function workoutTotalSeconds() {
+      return configuration.rounds * configuration.workSeconds +
+        (configuration.rounds - 1) * configuration.restSeconds;
+    }
+
+    function elapsedWorkoutSeconds() {
+      const roundsFinished = currentRound - 1;
+      const throughPreviousRounds = roundsFinished * (configuration.workSeconds + configuration.restSeconds);
+      if (phase === "work") {
+        return throughPreviousRounds + (configuration.workSeconds - displayedSeconds);
+      }
+      if (phase === "rest") {
+        return throughPreviousRounds + configuration.workSeconds +
+          (configuration.restSeconds - displayedSeconds);
+      }
+      return throughPreviousRounds;
+    }
+
+    function minutesPhrase(seconds) {
+      const minutes = Math.round(seconds / 60);
+      return `${minutes} ${minutes === 1 ? "minute" : "minutes"}`;
+    }
+
+    // Rounding to the nearest minute would otherwise read "about 0 minutes" at
+    // the two ends of the workout.
+    function progressSentence(elapsedSeconds, remainingSeconds) {
+      const donePart = elapsedSeconds < 30 ? "Just started" : `About ${minutesPhrase(elapsedSeconds)} done`;
+      const remainingPart = remainingSeconds < 30
+        ? "less than a minute to go"
+        : `about ${minutesPhrase(remainingSeconds)} to go`;
+      return `${donePart} – ${remainingPart}.`;
     }
 
     function isPaused() {
@@ -963,6 +1024,14 @@
       // as the app instead of exposing the root page's default background.
       document.documentElement?.style.setProperty("--app-surface", themeColor.content);
 
+      if (phase === "work" || phase === "rest") {
+        const elapsedSeconds = elapsedWorkoutSeconds();
+        const remainingSeconds = workoutTotalSeconds() - elapsedSeconds;
+        timeProgress.textContent = progressSentence(elapsedSeconds, remainingSeconds);
+      } else {
+        timeProgress.textContent = "";
+      }
+
       const startActionLabel = isPaused() ? "Resume timer" : "Start timer";
       startButton.setAttribute("aria-label", isPreparing ? "Preparing audio" : startActionLabel);
       startButton.setAttribute("aria-busy", String(isPreparing));
@@ -1024,7 +1093,7 @@
         // A context closed during background recovery must not affect its replacement.
         if (context !== audioContext) return;
         if (context.state === "running") {
-          audioStatus.textContent = "Web Audio ready · mixes with other audio";
+          audioStatus.textContent = "";
         } else if (isCounting()) {
           handlePause();
           announcer.textContent = "Timer paused because iOS interrupted audio.";
@@ -1065,7 +1134,7 @@
       unlockSource.buffer = unlockBuffer;
       unlockSource.connect(context.destination);
       unlockSource.start(0);
-      audioStatus.textContent = "Web Audio ready · mixes with other audio";
+      audioStatus.textContent = "";
     }
 
     async function prepareWorkoutBuffers() {

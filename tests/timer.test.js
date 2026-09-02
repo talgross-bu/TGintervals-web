@@ -320,7 +320,8 @@ test("recovers audio after podcast app switching and keeps failed recovery pause
   await startButton.dispatch("click");
   assert.equal(harness.audioContexts.length, 2);
   assert.equal(harness.audioContexts[1].state, "running");
-  assert.equal(audioStatus.textContent, "Web Audio ready · mixes with other audio");
+  // A recovered context clears the status line rather than announcing itself.
+  assert.equal(audioStatus.textContent, "");
   assert.equal(pauseButton.disabled, false);
 
   harness.document.visibilityState = "hidden";
