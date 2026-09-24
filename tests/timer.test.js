@@ -7,12 +7,7 @@ const test = require("node:test");
 const vm = require("node:vm");
 
 const projectRoot = path.resolve(__dirname, "..");
-const html = fs.readFileSync(path.join(projectRoot, "index.html"), "utf8");
-const scriptStart = html.indexOf("<script>");
-const scriptEnd = html.indexOf("</script>", scriptStart);
-assert.notEqual(scriptStart, -1);
-assert.notEqual(scriptEnd, -1);
-const applicationScript = html.slice(scriptStart + 8, scriptEnd);
+const applicationScript = fs.readFileSync(path.join(projectRoot, "app.js"), "utf8");
 
 function deferred() {
   let resolve;
@@ -106,7 +101,7 @@ class FakeAudioSource extends FakeEventTarget {
   disconnect() {}
 
   start(...argumentsList) {
-    this.sourceStarts.push(argumentsList);
+    this.sourceStarts.push({ buffer: this.buffer, argumentsList });
   }
 
   stop() {
@@ -192,9 +187,10 @@ function createHarness(options = {}) {
       return Object.assign(new FakeAudioNode(), { gain: {} });
     }
 
-    async decodeAudioData() {
+    async decodeAudioData(bytes) {
       if (options.decodeGate) return options.decodeGate.promise;
-      return { duration: 3 };
+      // The fake fetch below tags each byte array with its URL so tests can tell cues apart.
+      return { duration: 3, url: bytes.url };
     }
 
     async resume() {
@@ -252,10 +248,11 @@ function createHarness(options = {}) {
   };
 
   const context = vm.createContext({
-    Uint8Array,
-    atob,
     console: appConsole,
     document,
+    async fetch(url) {
+      return { ok: true, arrayBuffer: async () => ({ url }) };
+    },
     localStorage: {
       getItem(key) {
         return storedPreferences.get(key) ?? null;
@@ -274,7 +271,7 @@ function createHarness(options = {}) {
     setImmediate,
     window
   });
-  new vm.Script(applicationScript, { filename: "index.html" }).runInContext(context);
+  new vm.Script(applicationScript, { filename: "app.js" }).runInContext(context);
 
   return {
     audioContexts,
@@ -285,6 +282,12 @@ function createHarness(options = {}) {
     },
     latestIntervalCallback() {
       return [...intervalCallbacks.values()].at(-1);
+    },
+    // Cue names in the order they were scheduled; the silent unlock buffer has no URL.
+    scheduledCues() {
+      return sourceStarts
+        .filter((record) => record.buffer?.url)
+        .map((record) => path.basename(record.buffer.url, ".mp3"));
     },
     setCurrentTime(value) {
       currentTime = value;
@@ -431,4 +434,74 @@ test("does not schedule stale countdown audio after a phase deadline", async () 
 
   assert.equal(harness.evaluate("phase"), "work");
   assert.equal(harness.sourceStarts.length, startsBeforeDeadline);
+});
+
+test("runs the full workout in order and plays each cue at its boundary", async () => {
+  const harness = createHarness();
+  const startButton = harness.elementFor("#startButton");
+  const pauseButton = harness.elementFor("#pauseButton");
+  const resetButton = harness.elementFor("#resetButton");
+  const timeDisplay = harness.elementFor("#timeDisplay");
+  const tick = (milliseconds) => {
+    harness.setCurrentTime(milliseconds);
+    harness.latestIntervalCallback()();
+  };
+
+  await startButton.dispatch("click");
+  assert.equal(harness.evaluate("phase"), "setup");
+  assert.equal(timeDisplay.textContent, "5");
+  assert.deepEqual(harness.scheduledCues(), []);
+
+  // The countdown clip lasts three seconds and is armed once it can end on the boundary.
+  tick(2_000);
+  assert.equal(timeDisplay.textContent, "3");
+  assert.deepEqual(harness.scheduledCues(), ["countdown"]);
+
+  tick(5_000);
+  assert.equal(harness.evaluate("phase"), "work");
+  assert.equal(harness.evaluate("currentRound"), 1);
+  assert.equal(timeDisplay.textContent, "30");
+
+  const expectedCues = ["countdown"];
+  let workStart = 5_000;
+  for (let round = 1; round <= 7; round += 1) {
+    assert.equal(harness.evaluate("phase"), "work");
+    assert.equal(harness.evaluate("currentRound"), round);
+    assert.equal(pauseButton.disabled, false);
+
+    tick(workStart + 30_000);
+    if (round === 7) break;
+
+    assert.equal(harness.evaluate("phase"), "rest");
+    assert.equal(timeDisplay.textContent, "55");
+    expectedCues.push("ding3");
+    assert.deepEqual(harness.scheduledCues(), expectedCues);
+
+    tick(workStart + 30_000 + 52_000);
+    expectedCues.push("countdown");
+    assert.deepEqual(harness.scheduledCues(), expectedCues);
+
+    tick(workStart + 85_000);
+    workStart += 85_000;
+  }
+
+  expectedCues.push("completion");
+  assert.equal(harness.evaluate("phase"), "completed");
+  assert.deepEqual(harness.scheduledCues(), expectedCues);
+  assert.equal(timeDisplay.textContent, "0");
+  assert.equal(startButton.disabled, true);
+  assert.equal(pauseButton.disabled, true);
+  assert.equal(resetButton.disabled, false);
+  assert.equal(harness.latestIntervalCallback(), undefined);
+});
+
+test("describes workout progress in whole minutes without saying zero", () => {
+  const harness = createHarness();
+  const sentence = (elapsed, remaining) => harness.evaluate(`progressSentence(${elapsed}, ${remaining})`);
+
+  assert.equal(sentence(0, 300), "Just started – about 5 minutes to go.");
+  assert.equal(sentence(29, 300), "Just started – about 5 minutes to go.");
+  assert.equal(sentence(30, 300), "About 1 minute done – about 5 minutes to go.");
+  assert.equal(sentence(300, 29), "About 5 minutes done – less than a minute to go.");
+  assert.equal(sentence(300, 90), "About 5 minutes done – about 2 minutes to go.");
 });

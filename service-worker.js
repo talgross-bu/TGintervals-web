@@ -1,9 +1,14 @@
 "use strict";
 
-const CACHE_VERSION = "tgintervals-4.2.2";
+const CACHE_VERSION = "tgintervals-4.3.0";
 const APP_SHELL = [
   "./index.html",
+  "./styles.css",
+  "./app.js",
   "./manifest.webmanifest",
+  "./sounds/countdown.mp3",
+  "./sounds/ding3.mp3",
+  "./sounds/completion.mp3",
   "./icons/tgintervals-180.png",
   "./icons/tgintervals-192.png",
   "./icons/tgintervals-512.png"

@@ -34,28 +34,56 @@ test("release manifest and install assets are complete", () => {
 
 test("published scripts parse and HTML references the complete runtime bundle", () => {
   const html = read("index.html").toString();
-  const scriptStart = html.indexOf("<script>");
-  const scriptEnd = html.indexOf("</script>", scriptStart);
-  new vm.Script(html.slice(scriptStart + 8, scriptEnd), { filename: "index.html" });
+  new vm.Script(read("app.js").toString(), { filename: "app.js" });
   new vm.Script(read("service-worker.js").toString(), { filename: "service-worker.js" });
+
+  // Everything runs from separate files, so the policy can refuse inline code.
+  assert.match(html, /<link rel="stylesheet" href="styles\.css">/);
+  assert.match(html, /<script src="app\.js" defer><\/script>/);
+  assert.doesNotMatch(html, /<script>/);
+  assert.doesNotMatch(html, /<style>/);
+  assert.doesNotMatch(html, /unsafe-inline/);
+  assert.doesNotMatch(html, / style="/);
 
   assert.match(html, /manifest\.webmanifest/);
   assert.match(html, /icons\/tgintervals-180\.png/);
   assert.match(html, /icons\/tgintervals-192\.png/);
-  assert.match(html, /serviceWorker\.register\("\.\/service-worker\.js"\)/);
   assert.doesNotMatch(html, /embeddedIconURL/);
   assert.doesNotMatch(html, /TGintervals V4/);
-  assert.match(html, /min-height: 100dvh/);
-  assert.match(html, /--app-surface/);
+
+  const appScript = read("app.js").toString();
+  assert.match(appScript, /serviceWorker\.register\("\.\/service-worker\.js"\)/);
+  assert.doesNotMatch(appScript, /atob\(/);
+
+  const styles = read("styles.css").toString();
+  assert.match(styles, /min-height: 100dvh/);
+  assert.match(styles, /--app-surface/);
 
   const headers = read("_headers").toString();
   assert.match(headers, /Content-Security-Policy:/);
+  assert.doesNotMatch(headers, /unsafe-inline/);
   assert.match(headers, /X-Content-Type-Options: nosniff/);
   assert.match(headers, /\/service-worker\.js[\s\S]*Cache-Control: no-cache/);
 
   const packageMetadata = JSON.parse(read("package.json"));
   const serviceWorker = read("service-worker.js").toString();
   assert.match(serviceWorker, new RegExp(`tgintervals-${packageMetadata.version.replaceAll(".", "\\.")}`));
+});
+
+test("service worker shell lists every file the app loads and the cues are MP3s", () => {
+  const serviceWorker = read("service-worker.js").toString();
+  for (const asset of ["./styles.css", "./app.js", "./manifest.webmanifest"]) {
+    assert.match(serviceWorker, new RegExp(`"${asset.replaceAll(".", "\\.")}"`));
+  }
+
+  const appScript = read("app.js").toString();
+  const soundPaths = [...appScript.matchAll(/"(sounds\/[a-z0-9]+\.mp3)"/g)].map((match) => match[1]);
+  assert.deepEqual(soundPaths.sort(), ["sounds/completion.mp3", "sounds/countdown.mp3", "sounds/ding3.mp3"]);
+  for (const soundPath of soundPaths) {
+    assert.match(serviceWorker, new RegExp(`"\\./${soundPath.replaceAll(".", "\\.")}"`));
+    // An MPEG audio frame opens with an 11-bit sync word: 0xFF followed by 0xFB for MPEG-1 Layer III.
+    assert.equal(read(soundPath).subarray(0, 2).toString("hex"), "fffb");
+  }
 });
 
 test("service worker installs the shell and serves cached HTML when offline", async () => {
